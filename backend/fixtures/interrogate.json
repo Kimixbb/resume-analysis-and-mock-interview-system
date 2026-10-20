@@ -1,0 +1,55 @@
+{
+  "risks": [
+    {
+      "type": "逻辑矛盾",
+      "text": "2024.09-2024.06",
+      "reason": "起止时间倒置",
+      "experience_id": "proj_1",
+      "start": 101,
+      "end": 116
+    },
+    {
+      "type": "无数字",
+      "text": "大幅提升了系统性能",
+      "reason": "无基线、无百分比、无时间窗",
+      "experience_id": "proj_1",
+      "start": 140,
+      "end": 149
+    },
+    {
+      "type": "空话",
+      "text": "认真负责、沟通能力强",
+      "reason": "形容词堆砌，无事实或结果支撑",
+      "experience_id": "proj_1",
+      "start": 150,
+      "end": 160
+    },
+    {
+      "type": "空话",
+      "text": "获得一致好评",
+      "reason": "无具体评价人或可验证结果",
+      "experience_id": "work_1",
+      "start": 250,
+      "end": 256
+    }
+  ],
+  "questions": [
+    {
+      "text": "这段经历写的是 2024.09–2024.06，时间为什么是倒的？",
+      "risk_index": 0
+    },
+    {
+      "text": "你说的“大幅提升性能”，优化前 QPS 和 P99 分别是多少？",
+      "risk_index": 1
+    },
+    {
+      "text": "“认真负责、沟通能力强”具体体现在哪件事上？",
+      "risk_index": 2
+    },
+    {
+      "text": "“获得一致好评”是谁给的评价？有具体反馈或数据吗？",
+      "risk_index": 3
+    }
+  ],
+  "weakest_experience_id": "proj_1"
+}

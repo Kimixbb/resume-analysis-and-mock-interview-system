@@ -1,0 +1,26 @@
+{
+  "score": 58,
+  "gaps": [
+    {
+      "jd": "3 年以上后端开发经验",
+      "resume": "实习 2 个月 + 个人项目",
+      "detail": "年限与岗位要求不匹配"
+    },
+    {
+      "jd": "具备高并发系统设计经验",
+      "resume": "只写了 FastAPI + MySQL，未体现并发场景",
+      "detail": "缺少高并发设计与性能指标"
+    },
+    {
+      "jd": "熟悉 Redis 缓存设计",
+      "resume": "技能里只写“了解 Redis”，项目未使用",
+      "detail": "缺少缓存实践"
+    }
+  ],
+  "dimensions": {
+    "hard_skill": 20,
+    "project": 18,
+    "metric": 8,
+    "domain": 12
+  }
+}
