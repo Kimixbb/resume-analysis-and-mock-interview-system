@@ -7,9 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.core.config import settings
-from backend.app.core.errors import DBError
-from backend.app.core.models import Base, Jd, Report, Resume
+from app.core.config import settings
+from app.core.errors import DBError
+from app.core.models import Base, Jd, Report, Resume
 
 # SQLite 需要关闭线程检查：FastAPI 的同步接口跑在线程池里。
 # 其他数据库类型不需要关闭线程检查。
