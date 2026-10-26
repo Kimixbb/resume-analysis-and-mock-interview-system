@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.db import create_all
 from app.core.errors import AppError
+from app.routers.parse import router as parse_router  # M1 解析（A 负责）
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +42,14 @@ async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
 async def handle_validation_error(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    # 统一格式 {code, message}；把第一条错误自带的原因拼上去，
+    # 例如「JSON decode error」（请求体不是合法 JSON）、「Field required」（少传了字段）。
+    errors = exc.errors()
+    first = errors[0] if errors else {}
+    message = f"请求参数不合法：{first.get('msg', '')}"
     return JSONResponse(
         status_code=400,
-        content={"code": "INVALID_INPUT", "message": "请求参数不合法"},
+        content={"code": "INVALID_INPUT", "message": message},
     )
 
 # 捕获未定义的异常
@@ -64,3 +70,7 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
 @app.get("/")
 def root() -> dict[str, str]:
     return {"message": "根路径"}
+
+
+# 各模块把自己的 router 注册进来
+app.include_router(parse_router)
