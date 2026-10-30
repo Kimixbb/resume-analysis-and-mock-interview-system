@@ -12,6 +12,7 @@ from app.core.db import create_all
 from app.core.errors import AppError
 from app.routers.parse import router as parse_router  # M1 解析（A 负责）
 from app.routers.match import router as match_router  # M2 匹配（B 负责）
+from app.routers.interrogate import router as interrogate_router  # M3 拷问（C 负责）
 
 logger = logging.getLogger(__name__)
 
@@ -76,3 +77,4 @@ def root() -> dict[str, str]:
 # 各模块把自己的 router 注册进来
 app.include_router(parse_router)
 app.include_router(match_router)
+app.include_router(interrogate_router)
