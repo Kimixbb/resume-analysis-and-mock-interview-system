@@ -69,10 +69,12 @@ def rewrite_experience(req: RewriteRequest) -> RewriteResponse:
     responses={
         400: {"description": "question_index 越界或 answer 不在 1–1000 字"},
         404: {"description": "报告不存在"},
+        422: {"description": "LLM 点评为空或不符合契约"},
+        500: {"description": "LLM 超时/网络异常或数据库更新失败"},
     },
 )
 def submit_qa(req: QARequest) -> QAResponse:
-    """逐题问答：后端按 question_index 取原题，规则点评，同题覆盖写入。"""
+    """逐题问答：后端按 question_index 取原题，LLM 点评，同题覆盖写入。"""
     comment = qa_service.evaluate_answer(
         req.report_id, req.question_index, req.answer
     )

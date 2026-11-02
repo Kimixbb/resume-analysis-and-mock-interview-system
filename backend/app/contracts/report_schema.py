@@ -3,13 +3,13 @@
 一个文件管三块接口（对齐设计文档 §5.5–§5.8）：
 - POST /api/report            汇总落库：原始文本 + M1/M2/M3 结果 → 三个 id
 - GET  /api/report/{report_id} 联查三表、反序列化 JSON → 前端可渲染结构
-- POST /api/qa                按 question_index 取原题、规则点评、覆盖写入
+- POST /api/qa                按 question_index 取原题、LLM 点评、覆盖写入
 - POST /api/rewrite           STAR 重写：before 来自简历原文，after/star 来自 LLM
 """
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.contracts.interrogate import Question, RiskItem
 from app.contracts.match import Gap
@@ -90,6 +90,24 @@ class QaEntry(BaseModel):
     question: str
     answer: str
     comment: str
+
+
+class QACommentOutput(BaseModel):
+    """LLM 点评输出：只给一句 comment。
+
+    设计文档 §4.5.3（v1.1）：点评改由 LLM 生成，空点评或全空白视为
+    模型输出不合契约（422）。
+    """
+
+    comment: str = Field(min_length=1, max_length=500)
+
+    @field_validator("comment")
+    @classmethod
+    def check_not_blank(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("点评不能为空")
+        return text
 
 
 class QAResponse(BaseModel):

@@ -1,43 +1,73 @@
-"""M4 规则点评的单元测试：不碰数据库、不碰 LLM，只验证判定顺序与话术。"""
+"""M4 逐题问答的单元测试：LLM 点评的输入素材、覆盖写入与错误语义。
+
+LLM 用假实现替换，不联网；数据库用 conftest 的独立测试库。
+"""
+
+import json
 
 import pytest
 
-from app.services.qa_service import comment_for
+from app.contracts.report_schema import QACommentOutput
+from app.core.errors import InvalidInput, LLMOutputInvalid, NotFound
+from app.services import qa_service
 
 
-@pytest.mark.parametrize("phrase", ["大概", "可能", "应该"])
-def test_vague_phrase_points_to_missing_facts(phrase):
-    comment = comment_for(f"我觉得{phrase}快了很多吧")
+def _fake_llm(monkeypatch, comment: str = "点评：回答缺具体事实，建议补充可验证的数据。"):
+    captured: dict = {}
 
-    assert "缺具体事实" in comment
-    assert phrase in comment
+    def fake(*, system, user, schema, temperature=0.2):
+        captured["system"] = system
+        captured["user"] = json.loads(user)
+        if comment.strip():
+            return QACommentOutput(comment=comment)
+        # 模拟模型返回全空白：绕过校验构造，让服务层自己判空
+        return QACommentOutput.model_construct(comment=comment)
 
-
-def test_answer_without_metric_is_flagged():
-    comment = comment_for("我优化了接口，效果很好，团队都很满意")
-
-    assert "量化" in comment
-
-
-def test_short_answer_with_metric_is_flagged_for_detail():
-    comment = comment_for("QPS 从 300 提到 1200")
-
-    assert "太短" in comment
+    monkeypatch.setattr(qa_service, "model_json", fake)
+    return captured
 
 
-def test_specific_long_answer_gets_positive_but_actionable_comment():
-    answer = (
-        "订单服务原先用 N+1 查询，压测 P99 480ms。我独立把热点商品改成批量查询并加 Redis 缓存，"
-        "上线后 QPS 从 300 提到 1200，P99 降到 210ms。"
-    )
-    comment = comment_for(answer)
+def test_prompt_contains_question_answer_risk_and_keywords(seeded_report, report_payload, monkeypatch):
+    captured = _fake_llm(monkeypatch)
 
-    assert "事实支撑" in comment
-    assert "独立贡献" in comment
+    qa_service.evaluate_answer(seeded_report["report_id"], 0, "大概快了很多")
+
+    user = captured["user"]
+    assert user["question"] == report_payload["questions"][0]["text"]
+    assert user["answer"] == "大概快了很多"
+    # 第 0 题指向第 0 条风险
+    assert user["risk"]["type"] == report_payload["risks"][0]["type"]
+    assert user["jd_keywords"] == report_payload["req"]["keywords"]
+    assert "点评" in captured["system"]
 
 
-def test_priority_is_vague_before_short():
-    """「大概吧」既短又模糊，按 FR-007 应先命中「缺具体事实」。"""
-    comment = comment_for("大概吧")
+def test_comment_is_persisted_and_overwritten(seeded_report, monkeypatch):
+    _fake_llm(monkeypatch, comment="点评：第一次")
+    qa_service.evaluate_answer(seeded_report["report_id"], 0, "第一次回答，含数字 123")
 
-    assert "缺具体事实" in comment
+    _fake_llm(monkeypatch, comment="点评：第二次，建议补基线")
+    qa_service.evaluate_answer(seeded_report["report_id"], 0, "第二次回答，含数字 456")
+
+    from app.services.report_service import get_report_by_id
+
+    report = get_report_by_id(seeded_report["report_id"])
+    assert len(report.qa) == 1
+    assert report.qa[0].comment == "点评：第二次，建议补基线"
+    assert report.qa[0].answer == "第二次回答，含数字 456"
+
+
+def test_blank_comment_raises_llm_output_invalid(seeded_report, monkeypatch):
+    _fake_llm(monkeypatch, comment="   ")
+
+    with pytest.raises(LLMOutputInvalid):
+        qa_service.evaluate_answer(seeded_report["report_id"], 0, "有数字 123")
+
+
+def test_out_of_range_index_raises_invalid_input(seeded_report):
+    with pytest.raises(InvalidInput):
+        qa_service.evaluate_answer(seeded_report["report_id"], 99, "有数字 123")
+
+
+def test_missing_report_raises_not_found():
+    with pytest.raises(NotFound):
+        qa_service.evaluate_answer(99999, 0, "有数字 123")

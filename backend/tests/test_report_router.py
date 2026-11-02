@@ -143,7 +143,20 @@ def test_get_missing_report_returns_unified_404(client):
 
 
 # ==================== POST /api/qa ====================
-def test_qa_uses_backend_question_and_returns_comment(client, seeded_report):
+def _fake_qa(monkeypatch, comment: str = "点评：回答缺具体事实，建议补充可验证的数据。"):
+    """把 qa_service 的 LLM 换成固定点评，避免联网。"""
+    from app.contracts.report_schema import QACommentOutput
+    from app.services import qa_service
+
+    monkeypatch.setattr(
+        qa_service,
+        "model_json",
+        lambda **kwargs: QACommentOutput(comment=comment),
+    )
+
+
+def test_qa_uses_backend_question_and_returns_comment(client, seeded_report, monkeypatch):
+    _fake_qa(monkeypatch)
     response = client.post(
         "/api/qa",
         json={
@@ -166,21 +179,44 @@ def test_qa_uses_backend_question_and_returns_comment(client, seeded_report):
     assert entry["answer"].startswith("优化前 QPS 300")
 
 
-def test_qa_vague_answer_points_to_missing_facts(client, seeded_report):
+def test_qa_llm_invalid_output_returns_422(client, seeded_report, monkeypatch):
+    from app.core.errors import LLMOutputInvalid
+    from app.services import qa_service
+
+    def fake(**kwargs):
+        raise LLMOutputInvalid("模型输出不符合约定")
+
+    monkeypatch.setattr(qa_service, "model_json", fake)
+
     response = client.post(
         "/api/qa",
-        json={
-            "report_id": seeded_report["report_id"],
-            "question_index": 0,
-            "answer": "大概吧",
-        },
+        json={"report_id": seeded_report["report_id"], "question_index": 0, "answer": "有数字 123"},
     )
 
-    assert response.status_code == 200
-    assert "缺具体事实" in response.json()["comment"]
+    assert response.status_code == 422
+    assert response.json()["code"] == "LLM_OUTPUT_INVALID"
 
 
-def test_qa_same_question_overwrites_instead_of_appending(client, seeded_report):
+def test_qa_llm_upstream_failure_returns_500(client, seeded_report, monkeypatch):
+    from app.core.errors import LLMUpstreamError
+    from app.services import qa_service
+
+    def fake(**kwargs):
+        raise LLMUpstreamError("模型服务请求失败")
+
+    monkeypatch.setattr(qa_service, "model_json", fake)
+
+    response = client.post(
+        "/api/qa",
+        json={"report_id": seeded_report["report_id"], "question_index": 0, "answer": "有数字 123"},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "LLM_UPSTREAM_ERROR"
+
+
+def test_qa_same_question_overwrites_instead_of_appending(client, seeded_report, monkeypatch):
+    _fake_qa(monkeypatch)
     report_id = seeded_report["report_id"]
     url = "/api/qa"
     first = client.post(
