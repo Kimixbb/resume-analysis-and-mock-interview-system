@@ -33,7 +33,7 @@ def test_scan_rules_assigns_experience_ids():
     assert by_text["2024.09-2024.06"].experience_id == "proj_1"
     assert by_text["大幅提升了系统性能"].experience_id == "proj_1"
     assert by_text["认真负责、沟通能力强"].experience_id == "proj_1"
-    assert by_text["获得一致好评"].experience_id == "work_1"
+    assert by_text["获得一致好评"].experience_id == "intern_1"
 
 
 def test_clean_resume_has_no_risks():

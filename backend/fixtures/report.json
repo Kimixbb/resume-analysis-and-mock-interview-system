@@ -26,7 +26,7 @@
         "metrics": []
       },
       {
-        "id": "work_1",
+        "id": "intern_1",
         "kind": "intern",
         "title": "后端开发实习生",
         "org": "XX科技有限公司",
@@ -118,7 +118,7 @@
       "type": "空话",
       "text": "获得一致好评",
       "reason": "无具体评价人或可验证结果",
-      "experience_id": "work_1",
+      "experience_id": "intern_1",
       "start": 250,
       "end": 256
     }

@@ -26,7 +26,7 @@ def _fake_result() -> InterrogateResult:
             Question(text="第二条追问", risk_index=1),
             Question(text="第三条追问", risk_index=2),
         ],
-        weakest_experience_id="work_1",
+        weakest_experience_id="intern_1",
     )
 
 
@@ -47,7 +47,7 @@ def test_service_builds_questions_and_weakest(monkeypatch):
         "第二条追问",
         "第三条追问",
     ]
-    assert result.weakest_experience_id == "work_1"
+    assert result.weakest_experience_id == "intern_1"
     assert calls["schema"] is InterrogateResult
     assert "面试官" in calls["system"]
 
@@ -67,7 +67,7 @@ def test_invalid_and_duplicate_indexes_are_filtered(monkeypatch):
                 Question(text="重复", risk_index=1),
                 Question(text="保留二", risk_index=2),
             ],
-            weakest_experience_id="work_1",
+            weakest_experience_id="intern_1",
         )
 
     monkeypatch.setattr(interrogate_service, "model_json", fake)

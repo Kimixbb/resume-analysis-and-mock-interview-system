@@ -38,7 +38,7 @@ def _fake_result() -> InterrogateResult:
             Question(text="第一条追问", risk_index=0),
             Question(text="第二条追问", risk_index=1),
         ],
-        weakest_experience_id="work_1",
+        weakest_experience_id="intern_1",
     )
 
 
@@ -52,7 +52,7 @@ def test_interrogate_success(monkeypatch):
     body = response.json()
     assert len(body["risks"]) == 4
     assert [question["risk_index"] for question in body["questions"]] == [0, 1]
-    assert body["weakest_experience_id"] == "work_1"
+    assert body["weakest_experience_id"] == "intern_1"
 
 
 def test_missing_raw_text_returns_400():
