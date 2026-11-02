@@ -286,11 +286,14 @@ def test_rewrite_defaults_to_weakest_experience(client, seeded_report, report_pa
 
 def test_rewrite_uses_explicit_experience_id(client, seeded_report, report_payload, monkeypatch):
     _fake_rewrite(monkeypatch, improved_score=90)
-    work = next(exp for exp in report_payload["parsed"]["experiences"] if exp["id"] == "work_1")
+    # 不写死经历 id：fixtures 里的实习经历 id 从 work_1 改成过 intern_1
+    work = next(
+        exp for exp in report_payload["parsed"]["experiences"] if exp["id"] != "proj_1"
+    )
 
     response = client.post(
         "/api/rewrite",
-        json={"report_id": seeded_report["report_id"], "experience_id": "work_1"},
+        json={"report_id": seeded_report["report_id"], "experience_id": work["id"]},
     )
 
     assert response.status_code == 200

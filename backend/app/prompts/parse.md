@@ -8,7 +8,7 @@ JSON 结构（字段名必须完全一致）：
     "skills": ["从简历提取的技能，如 Python"],
     "experiences": [
       {
-        "id": "唯一编号，如 proj_1、work_1、edu_1",
+        "id": "唯一编号，如 proj_1、work_1、intern_1、edu_1",
         "kind": "project / work / intern 三选一",
         "title": "项目名或职位名",
         "org": "公司或组织，个人项目填「个人项目」",
