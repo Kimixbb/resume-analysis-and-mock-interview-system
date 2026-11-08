@@ -72,6 +72,48 @@ def test_create_report_rejects_unknown_weakest_experience(client, report_payload
     assert response.json()["code"] == "INVALID_INPUT"
 
 
+def test_create_report_rejects_mixed_resume(client, report_payload):
+    """两个人的简历拼在一起：落库前必须 400，不能当同一人打分存档。"""
+    report_payload["resume_text"] = (
+        "张三 | 138-0000-0000 | zhangsan@example.com\n"
+        "【工作经历】某科技公司 产品经理（2022.07-至今），负责用户增长，转化率提升 15%。\n"
+        "李四 | 应届毕业生 | 新闻学专业\n"
+        "【实习经历】某传媒公司 新媒体运营实习生（2023.06-2023.09），公众号粉丝 5000→15000。\n"
+    )
+
+    response = client.post("/api/report", json=report_payload)
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "INVALID_INPUT"
+    assert "多个姓名" in body["message"]
+    assert "不属于同一个人" in body["message"]
+    # 没有落任何半成品
+    assert (_count_rows("resume"), _count_rows("jd"), _count_rows("report")) == (0, 0, 0)
+
+
+def test_create_report_rejects_swapped_resume_and_jd(client, report_payload):
+    """简历和 JD 填反：落库前 400，且提示交换两个输入框。"""
+    report_payload["resume_text"] = (
+        "招聘：财务专员/总账会计\n"
+        "【岗位职责】负责公司全盘账务处理，包括凭证审核、记账、结账等；\n"
+        "【任职要求】会计学本科及以上，持有初级会计师证优先。\n"
+    )
+    report_payload["jd_text"] = (
+        "王五 | 会计学本科 | 持有初级会计师证\n"
+        "【工作经历】某贸易有限公司 | 财务助理 (2020.03 - 2023.12)\n"
+        "负责日常费用报销审核、凭证录入及装订，保证账务处理的准确性。\n"
+    )
+
+    response = client.post("/api/report", json=report_payload)
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "INVALID_INPUT"
+    assert "填反" in body["message"]
+    assert (_count_rows("resume"), _count_rows("jd"), _count_rows("report")) == (0, 0, 0)
+
+
 def test_create_report_rolls_back_when_db_fails(client, report_payload, monkeypatch):
     from app.services import report_service
 
@@ -143,7 +185,20 @@ def test_get_missing_report_returns_unified_404(client):
 
 
 # ==================== POST /api/qa ====================
-def test_qa_uses_backend_question_and_returns_comment(client, seeded_report):
+def _fake_qa(monkeypatch, comment: str = "点评：回答缺具体事实，建议补充可验证的数据。"):
+    """把 qa_service 的 LLM 换成固定点评，避免联网。"""
+    from app.contracts.report_schema import QACommentOutput
+    from app.services import qa_service
+
+    monkeypatch.setattr(
+        qa_service,
+        "model_json",
+        lambda **kwargs: QACommentOutput(comment=comment),
+    )
+
+
+def test_qa_uses_backend_question_and_returns_comment(client, seeded_report, monkeypatch):
+    _fake_qa(monkeypatch)
     response = client.post(
         "/api/qa",
         json={
@@ -166,21 +221,44 @@ def test_qa_uses_backend_question_and_returns_comment(client, seeded_report):
     assert entry["answer"].startswith("优化前 QPS 300")
 
 
-def test_qa_vague_answer_points_to_missing_facts(client, seeded_report):
+def test_qa_llm_invalid_output_returns_422(client, seeded_report, monkeypatch):
+    from app.core.errors import LLMOutputInvalid
+    from app.services import qa_service
+
+    def fake(**kwargs):
+        raise LLMOutputInvalid("模型输出不符合约定")
+
+    monkeypatch.setattr(qa_service, "model_json", fake)
+
     response = client.post(
         "/api/qa",
-        json={
-            "report_id": seeded_report["report_id"],
-            "question_index": 0,
-            "answer": "大概吧",
-        },
+        json={"report_id": seeded_report["report_id"], "question_index": 0, "answer": "有数字 123"},
     )
 
-    assert response.status_code == 200
-    assert "缺具体事实" in response.json()["comment"]
+    assert response.status_code == 422
+    assert response.json()["code"] == "LLM_OUTPUT_INVALID"
 
 
-def test_qa_same_question_overwrites_instead_of_appending(client, seeded_report):
+def test_qa_llm_upstream_failure_returns_500(client, seeded_report, monkeypatch):
+    from app.core.errors import LLMUpstreamError
+    from app.services import qa_service
+
+    def fake(**kwargs):
+        raise LLMUpstreamError("模型服务请求失败")
+
+    monkeypatch.setattr(qa_service, "model_json", fake)
+
+    response = client.post(
+        "/api/qa",
+        json={"report_id": seeded_report["report_id"], "question_index": 0, "answer": "有数字 123"},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "LLM_UPSTREAM_ERROR"
+
+
+def test_qa_same_question_overwrites_instead_of_appending(client, seeded_report, monkeypatch):
+    _fake_qa(monkeypatch)
     report_id = seeded_report["report_id"]
     url = "/api/qa"
     first = client.post(

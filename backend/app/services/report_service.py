@@ -23,6 +23,8 @@ from app.contracts.report_schema import (
 )
 from app.core.db import create_report as create_report_record
 from app.core.db import get_jd, get_report, get_resume, get_session
+from app.core.errors import InvalidInput
+from app.services.report_guard import detect_input_swap, detect_resume_anomalies
 
 
 def _dump(model) -> str:
@@ -107,7 +109,22 @@ def create_report(data: CreateReportRequest) -> CreateReportResponse:
 
     任何一步失败都会由 get_session() 回滚并抛 DBError（500 DB_ERROR），
     不会留下只有简历和 JD、却没有报告的半成品。
+
+    落库前先做一次「同一人」校验：把两份简历拼在一起时，M1/M2/M3 会把它
+    当成一个候选人，所以这里必须在写库前拦下来（400 INVALID_INPUT）。
     """
+    swap_message = detect_input_swap(data.resume_text, data.jd_text)
+    if swap_message:
+        raise InvalidInput(swap_message)
+
+    anomalies = detect_resume_anomalies(data.resume_text, data.parsed)
+    if anomalies:
+        raise InvalidInput(
+            "简历信息可能不属于同一个人："
+            + "；".join(anomalies)
+            + "。请确认只提交一份简历后重试。"
+        )
+
     # M3 的结果按设计文档 6.2 合并进 report.risks 一个字段
     risks_json = json.dumps(
         {

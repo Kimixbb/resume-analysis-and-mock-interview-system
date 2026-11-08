@@ -216,6 +216,7 @@ class FakeLLM:
         from app.contracts.interrogate import InterrogateResult
         from app.contracts.match import MatchResult
         from app.contracts.parse import ParseResult
+        from app.contracts.report_schema import QACommentOutput
 
         self.calls.append(schema.__name__)
         if schema is ParseResult:
@@ -225,16 +226,30 @@ class FakeLLM:
             return self.match_result.model_copy(deep=True)
         if schema is InterrogateResult:
             return self.interrogate_result.model_copy(deep=True)
+        if schema is QACommentOutput:
+            return QACommentOutput(
+                comment="点评：回答缺具体事实，建议补充背景、动作和可验证的数据。"
+            )
         raise AssertionError(f"未预期的 LLM schema：{schema}")
 
 
 @pytest.fixture
 def fake_llm(monkeypatch) -> FakeLLM:
-    """把 M1/M2/M3 服务里的 model_json 换成离线假实现。"""
-    from app.services import interrogate_service, match_service, parse_service
+    """把 M1/M2/M3/M4 服务里的 model_json 换成离线假实现。"""
+    from app.services import (
+        interrogate_service,
+        match_service,
+        parse_service,
+        qa_service,
+    )
 
     fake = FakeLLM()
-    for module in (parse_service, match_service, interrogate_service):
+    for module in (
+        parse_service,
+        match_service,
+        interrogate_service,
+        qa_service,
+    ):
         monkeypatch.setattr(module, "model_json", fake)
     return fake
 
