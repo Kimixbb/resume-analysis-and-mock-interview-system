@@ -72,6 +72,26 @@ def test_create_report_rejects_unknown_weakest_experience(client, report_payload
     assert response.json()["code"] == "INVALID_INPUT"
 
 
+def test_create_report_rejects_mixed_resume(client, report_payload):
+    """两个人的简历拼在一起：落库前必须 400，不能当同一人打分存档。"""
+    report_payload["resume_text"] = (
+        "张三 | 138-0000-0000 | zhangsan@example.com\n"
+        "【工作经历】某科技公司 产品经理（2022.07-至今），负责用户增长，转化率提升 15%。\n"
+        "李四 | 应届毕业生 | 新闻学专业\n"
+        "【实习经历】某传媒公司 新媒体运营实习生（2023.06-2023.09），公众号粉丝 5000→15000。\n"
+    )
+
+    response = client.post("/api/report", json=report_payload)
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "INVALID_INPUT"
+    assert "多个姓名" in body["message"]
+    assert "不属于同一个人" in body["message"]
+    # 没有落任何半成品
+    assert (_count_rows("resume"), _count_rows("jd"), _count_rows("report")) == (0, 0, 0)
+
+
 def test_create_report_rolls_back_when_db_fails(client, report_payload, monkeypatch):
     from app.services import report_service
 

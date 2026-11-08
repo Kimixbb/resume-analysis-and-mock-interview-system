@@ -55,6 +55,24 @@ def test_diagnosis_chain_shows_score_gaps_and_questions(apptest_client, fake_llm
     assert "Q1 / 4" in markdown_text
 
 
+def test_mixed_resume_is_blocked_before_request(apptest_client):
+    """两份简历拼在一起时，前端应在发请求前就拦下。"""
+    at = apptest_client()
+    at.text_area(key="resume_input").input(
+        "张三 | 138-0000-0000 | zhangsan@example.com\n"
+        "【工作经历】某科技公司 产品经理（2022.07-至今），负责用户增长，转化率提升 15%。\n"
+        "李四 | 应届毕业生 | 新闻学专业\n"
+        "【实习经历】某传媒公司 新媒体运营实习生（2023.06-2023.09），公众号粉丝 5000→15000。\n"
+        + "补充说明：" + "内容" * 40
+    )
+    at.text_area(key="jd_input").input("岗位 JD " * 10)
+    at.button(key="diagnose_button").click().run()
+
+    assert not at.exception
+    assert any("多个姓名" in element.value for element in at.error)
+    assert len(at.metric) == 0
+
+
 def test_qa_one_question_at_a_time(apptest_client, fake_llm):
     at = apptest_client()
     _fill_and_diagnose(at)

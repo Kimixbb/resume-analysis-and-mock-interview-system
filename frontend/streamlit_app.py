@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import html as html_lib
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -72,6 +73,37 @@ def api(method: str, path: str, payload: dict | None = None) -> dict:
 
 def truncate(text: str, limit: int) -> str:
     return text[:limit]
+
+
+# 首行姓名 + `姓名：X` 两种写法；用于在发请求前拦住「两份简历拼在一起」
+_NAME_LINE = re.compile(r"^([\u4e00-\u9fa5]{2,4})(?=\s*(?:[|｜]|$))", re.MULTILINE)
+_NAME_LABEL = re.compile(r"姓\s*名\s*[：:]\s*([\u4e00-\u9fa5]{2,4})")
+_STOPWORDS = {
+    "教育经历", "工作经历", "实习经历", "项目经历", "校园经历", "项目经验",
+    "工作经验", "个人信息", "求职意向", "自我评价", "个人评价", "专业技能",
+    "技能", "证书", "获奖情况", "语言能力", "兴趣爱好", "联系方式", "个人项目",
+    "基本信息", "教育背景", "工作背景",
+    "获奖", "奖励", "荣誉", "项目", "证书", "培训", "专业", "语言", "兴趣",
+    "联系", "基本", "教育", "工作", "实习", "校园", "个人", "自我", "求职",
+    "经历", "技能", "特长", "爱好",
+}
+
+
+def detect_candidate_names(text: str) -> list[str]:
+    """从简历文本里提取候选姓名（去重、按出现顺序）。"""
+    names = [match.group(1) for match in _NAME_LABEL.finditer(text)]
+    names += [
+        match.group(1)
+        for match in _NAME_LINE.finditer(text)
+        if match.group(1) not in _STOPWORDS
+    ]
+    seen: set[str] = set()
+    unique: list[str] = []
+    for name in names:
+        if name not in seen:
+            seen.add(name)
+            unique.append(name)
+    return unique
 
 
 def reset_page_widgets() -> None:
@@ -222,6 +254,12 @@ with col_input:
             st.error(f"简历太短：至少 {RESUME_MIN} 字（当前 {len(resume_clean)} 字）")
         elif len(jd_clean) < JD_MIN:
             st.error(f"JD 太短：至少 {JD_MIN} 字（当前 {len(jd_clean)} 字）")
+        elif len(detect_candidate_names(resume_clean)) >= 2:
+            names = detect_candidate_names(resume_clean)
+            st.error(
+                f"检测到多个姓名（{'、'.join(names)}），这看起来是两份简历拼在一起。"
+                "请只提交一位候选人的简历。"
+            )
         else:
             try:
                 report = run_diagnosis(resume_clean, jd_clean)
