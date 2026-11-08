@@ -24,7 +24,7 @@ from app.contracts.report_schema import (
 from app.core.db import create_report as create_report_record
 from app.core.db import get_jd, get_report, get_resume, get_session
 from app.core.errors import InvalidInput
-from app.services.report_guard import detect_resume_anomalies
+from app.services.report_guard import detect_input_swap, detect_resume_anomalies
 
 
 def _dump(model) -> str:
@@ -113,6 +113,10 @@ def create_report(data: CreateReportRequest) -> CreateReportResponse:
     落库前先做一次「同一人」校验：把两份简历拼在一起时，M1/M2/M3 会把它
     当成一个候选人，所以这里必须在写库前拦下来（400 INVALID_INPUT）。
     """
+    swap_message = detect_input_swap(data.resume_text, data.jd_text)
+    if swap_message:
+        raise InvalidInput(swap_message)
+
     anomalies = detect_resume_anomalies(data.resume_text, data.parsed)
     if anomalies:
         raise InvalidInput(

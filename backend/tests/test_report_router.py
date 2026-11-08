@@ -92,6 +92,28 @@ def test_create_report_rejects_mixed_resume(client, report_payload):
     assert (_count_rows("resume"), _count_rows("jd"), _count_rows("report")) == (0, 0, 0)
 
 
+def test_create_report_rejects_swapped_resume_and_jd(client, report_payload):
+    """简历和 JD 填反：落库前 400，且提示交换两个输入框。"""
+    report_payload["resume_text"] = (
+        "招聘：财务专员/总账会计\n"
+        "【岗位职责】负责公司全盘账务处理，包括凭证审核、记账、结账等；\n"
+        "【任职要求】会计学本科及以上，持有初级会计师证优先。\n"
+    )
+    report_payload["jd_text"] = (
+        "王五 | 会计学本科 | 持有初级会计师证\n"
+        "【工作经历】某贸易有限公司 | 财务助理 (2020.03 - 2023.12)\n"
+        "负责日常费用报销审核、凭证录入及装订，保证账务处理的准确性。\n"
+    )
+
+    response = client.post("/api/report", json=report_payload)
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "INVALID_INPUT"
+    assert "填反" in body["message"]
+    assert (_count_rows("resume"), _count_rows("jd"), _count_rows("report")) == (0, 0, 0)
+
+
 def test_create_report_rolls_back_when_db_fails(client, report_payload, monkeypatch):
     from app.services import report_service
 

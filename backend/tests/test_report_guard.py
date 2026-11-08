@@ -6,10 +6,27 @@ from pathlib import Path
 from app.contracts.parse import Education, Experience, ResumeParsed
 from app.services.report_guard import (
     detect_candidate_names,
+    detect_input_swap,
     detect_resume_anomalies,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+
+JD_LIKE_TEXT = """招聘：财务专员/总账会计
+【岗位职责】
+负责公司全盘账务处理，包括凭证审核、记账、结账等；
+按时编制财务报表并进行基础财务分析；
+负责税务申报、发票管理及年度汇算清缴工作；
+配合外部审计工作，提供相关财务资料。
+【任职要求】
+会计学本科及以上，持有初级会计师证优先。
+"""
+
+RESUME_LIKE_TEXT = """王五 | 会计学本科 | 持有初级会计师证
+【工作经历】
+某贸易有限公司 | 财务助理 (2020.03 - 2023.12)
+负责日常费用报销审核、凭证录入及装订，保证账务处理的准确性。
+"""
 
 MIXED_TEXT = (
     "张三 | 138-0000-0000 | zhangsan@example.com\n"
@@ -77,6 +94,23 @@ def test_normal_resume_has_no_anomaly():
     text = (FIXTURES / "resume_bad.txt").read_text(encoding="utf-8")
 
     assert detect_resume_anomalies(text, parsed) == []
+
+
+def test_swapped_inputs_are_detected():
+    """简历框放 JD、JD 框放简历：必须识别出来。"""
+    # 第一个参数是「简历框」里的内容 = JD 文本；第二个是「JD 框」里的内容 = 简历文本
+    message = detect_input_swap(JD_LIKE_TEXT, RESUME_LIKE_TEXT)
+
+    assert message is not None
+    assert "填反" in message
+    assert "岗位职责" in message
+
+
+def test_correct_inputs_are_not_flagged_as_swapped():
+    resume = (FIXTURES / "resume_bad.txt").read_text(encoding="utf-8")
+    jd = (FIXTURES / "jd_backend.txt").read_text(encoding="utf-8")
+
+    assert detect_input_swap(resume, jd) is None
 
 
 def test_internship_during_school_is_not_an_anomaly():

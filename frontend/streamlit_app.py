@@ -106,6 +106,45 @@ def detect_candidate_names(text: str) -> list[str]:
     return unique
 
 
+# 判断「简历和 JD 是否填反」的特征词
+_JD_MARKERS = (
+    "岗位职责", "任职要求", "岗位要求", "任职资格", "职位描述",
+    "岗位描述", "招聘", "工作内容", "薪资", "福利", "简历投递",
+)
+_RESUME_MARKERS = (
+    "求职意向", "教育经历", "工作经历", "实习经历", "项目经历",
+    "校园经历", "项目经验", "姓名", "电话", "邮箱", "毕业院校", "主修",
+)
+_DATE_RANGE = re.compile(
+    r"\d{4}\s*[.\-/年]\s*\d{1,2}\s*[-–—~至]\s*(?:\d{4}\s*[.\-/年]\s*\d{1,2}|至今|现在)"
+)
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+_PHONE = re.compile(r"1[3-9]\d{9}|\d{3,4}-\d{7,8}")
+
+
+def detect_input_swap(resume_text: str, jd_text: str) -> str | None:
+    """简历框放的是 JD、JD 框放的是简历时，返回提示文案；正常返回 None。"""
+    jd_hits = [marker for marker in _JD_MARKERS if marker in resume_text]
+    if len(jd_hits) < 2:
+        return None
+
+    resume_hits = [marker for marker in _RESUME_MARKERS if marker in jd_text]
+    looks_like_resume = (
+        bool(_DATE_RANGE.search(jd_text))
+        or bool(_EMAIL.search(jd_text))
+        or bool(_PHONE.search(jd_text))
+    )
+    if not (len(resume_hits) >= 2 or (resume_hits and looks_like_resume)):
+        return None
+
+    return (
+        "简历和 JD 可能填反了：简历框里出现「"
+        + "、".join(jd_hits[:3])
+        + "」等岗位描述，JD 框里出现履历/日期/联系方式等简历内容。"
+        "请交换两个输入框后重试。"
+    )
+
+
 def reset_page_widgets() -> None:
     """新报告/清空时丢掉旧报告留下的输入框内容，避免串题。"""
     for key in list(st.session_state.keys()):
@@ -250,10 +289,13 @@ with col_input:
     ):
         resume_clean = resume_text.strip()
         jd_clean = jd_text.strip()
+        swap_message = detect_input_swap(resume_clean, jd_clean)
         if len(resume_clean) < RESUME_MIN:
             st.error(f"简历太短：至少 {RESUME_MIN} 字（当前 {len(resume_clean)} 字）")
         elif len(jd_clean) < JD_MIN:
             st.error(f"JD 太短：至少 {JD_MIN} 字（当前 {len(jd_clean)} 字）")
+        elif swap_message:
+            st.error(swap_message)
         elif len(detect_candidate_names(resume_clean)) >= 2:
             names = detect_candidate_names(resume_clean)
             st.error(

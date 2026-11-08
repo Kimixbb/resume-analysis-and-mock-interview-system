@@ -1,14 +1,16 @@
-"""M4 输入一致性校验：拒绝「两份简历混在一起」的脏数据落库。
+"""M4 输入一致性校验：拒绝「两份简历混在一起」或「简历/JD 填反」的脏数据落库。
 
 设计背景：M1 只负责抽取、M2 只负责打分、M3 的风险类型只覆盖
-「空话 / 无数字 / 日期倒置」，所以把两个人的简历拼在一起时，整条链路
-会把它当成一个候选人，打出看似正常的分。
+「空话 / 无数字 / 日期倒置」，所以把两个人的简历拼在一起、或者把简历和
+JD 填反时，整条链路仍会把它当成正常输入，打出看似正常的分。
 
-M4 是落库前的最后一道关，这里做一次确定性的「同一人」校验：
-1. 文本里出现多个姓名（首行姓名、`姓名：X` 两种写法）；
-2. 全职工作与实习时间重叠；
-3. 在校时间与全职工作重叠；
-4. 自称「应届」但存在 2 年以上的全职经历。
+M4 是落库前的最后一道关，这里做确定性的输入校验：
+1. 简历框里出现「岗位职责/任职要求」等 JD 文本、JD 框里出现履历/日期/联系方式
+   → 判定为「简历和 JD 填反了」；
+2. 文本里出现多个姓名（首行姓名、`姓名：X` 两种写法）；
+3. 全职工作与实习时间重叠；
+4. 在校时间与全职工作重叠；
+5. 自称「应届」但存在 2 年以上的全职经历。
 
 发现异常 → `POST /api/report` 返回 400 `INVALID_INPUT`，并说明原因；
 不改变 M1/M2/M3 的契约，也不依赖 LLM。
@@ -25,6 +27,22 @@ from app.contracts.parse import ResumeParsed
 _NAME_LINE = re.compile(r"^([\u4e00-\u9fa5]{2,4})(?=\s*(?:[|｜]|$))", re.MULTILINE)
 # `姓名：张三` / `姓 名: 张三`
 _NAME_LABEL = re.compile(r"姓\s*名\s*[：:]\s*([\u4e00-\u9fa5]{2,4})")
+
+# 判定「这段文本像 JD」的强特征
+_JD_MARKERS = (
+    "岗位职责", "任职要求", "岗位要求", "任职资格", "职位描述",
+    "岗位描述", "招聘", "工作内容", "薪资", "福利", "简历投递",
+)
+# 判定「这段文本像简历」的强特征
+_RESUME_MARKERS = (
+    "求职意向", "教育经历", "工作经历", "实习经历", "项目经历",
+    "校园经历", "项目经验", "姓名", "电话", "邮箱", "毕业院校", "主修",
+)
+_DATE_RANGE = re.compile(
+    r"\d{4}\s*[.\-/年]\s*\d{1,2}\s*[-–—~至]\s*(?:\d{4}\s*[.\-/年]\s*\d{1,2}|至今|现在)"
+)
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+_PHONE = re.compile(r"1[3-9]\d{9}|\d{3,4}-\d{7,8}")
 
 # 这些是栏目名，不是姓名
 _STOPWORDS = {
@@ -81,6 +99,29 @@ def _fmt(span: tuple[int, int]) -> str:
     start, end = span
     end_text = "至今" if end == 999912 else f"{end // 100:04d}-{end % 100:02d}"
     return f"{start // 100:04d}-{start % 100:02d}–{end_text}"
+
+
+def detect_input_swap(resume_text: str, jd_text: str) -> str | None:
+    """简历框里放的是 JD、JD 框里放的是简历时，返回提示文案；正常返回 None。"""
+    jd_hits = [marker for marker in _JD_MARKERS if marker in resume_text]
+    if len(jd_hits) < 2:
+        return None
+
+    resume_hits = [marker for marker in _RESUME_MARKERS if marker in jd_text]
+    looks_like_resume = (
+        bool(_DATE_RANGE.search(jd_text))
+        or bool(_EMAIL.search(jd_text))
+        or bool(_PHONE.search(jd_text))
+    )
+    if not (len(resume_hits) >= 2 or (resume_hits and looks_like_resume)):
+        return None
+
+    return (
+        "简历和 JD 可能填反了：简历框里出现「"
+        + "、".join(jd_hits[:3])
+        + "」等岗位描述，JD 框里出现履历/日期/联系方式等简历内容。"
+        "请交换两个输入框后重试。"
+    )
 
 
 def detect_candidate_names(resume_text: str) -> list[str]:

@@ -73,6 +73,29 @@ def test_mixed_resume_is_blocked_before_request(apptest_client):
     assert len(at.metric) == 0
 
 
+def test_swapped_inputs_are_blocked_before_request(apptest_client):
+    """简历和 JD 填反时，前端应在发请求前提示交换。"""
+    at = apptest_client()
+    at.text_area(key="resume_input").input(
+        "招聘：财务专员/总账会计\n"
+        "【岗位职责】负责公司全盘账务处理，包括凭证审核、记账、结账等；\n"
+        "负责税务申报、发票管理及年度汇算清缴工作；\n"
+        "【任职要求】会计学本科及以上，持有初级会计师证优先。\n"
+        + "补充说明：" + "内容" * 30
+    )
+    at.text_area(key="jd_input").input(
+        "王五 | 会计学本科 | 持有初级会计师证\n"
+        "【工作经历】某贸易有限公司 | 财务助理 (2020.03 - 2023.12)\n"
+        "负责日常费用报销审核、凭证录入及装订，保证账务处理的准确性。\n"
+        + "补充说明：" + "内容" * 15
+    )
+    at.button(key="diagnose_button").click().run()
+
+    assert not at.exception
+    assert any("填反" in element.value for element in at.error)
+    assert len(at.metric) == 0
+
+
 def test_qa_one_question_at_a_time(apptest_client, fake_llm):
     at = apptest_client()
     _fill_and_diagnose(at)
