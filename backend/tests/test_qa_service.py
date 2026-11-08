@@ -27,6 +27,17 @@ def _fake_llm(monkeypatch, comment: str = "点评：回答缺具体事实，建�
     return captured
 
 
+def test_qa_timeout_matches_design_doc():
+    """设计文档 §5.1（v1.1）：/api/qa 的超时是 30s。
+
+    QA 的 LLM 调用统一走 core/llm.py，用的是 settings.llm_timeout；
+    这里把它钉住，防止有人把 .env 的 LLM_TIMEOUT 调小后与接口契约不符。
+    """
+    from app.core.config import settings
+
+    assert settings.llm_timeout == 30
+
+
 def test_prompt_contains_question_answer_risk_and_keywords(seeded_report, report_payload, monkeypatch):
     captured = _fake_llm(monkeypatch)
 

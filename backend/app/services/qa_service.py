@@ -1,8 +1,9 @@
 """M4 逐题问答：后端按 question_index 取原题，调 LLM 生成点评，按题号覆盖写入。
 
-设计文档 §4.5.3（v1.1）把点评从「规则判断」改成「LLM 生成」：
+设计文档 §4.5.3 / §5.1（v1.1）把点评从「规则判断」改成「LLM 生成」：
 Prompt 输入原题、用户回答、对应风险与岗位关键词，要求给出一句具体、
 可执行的改进建议；comment 非空，模型输出非法 → 422，超时/网络异常 → 500。
+接口超时 30s：LLM 调用统一走 core/llm.py，用的是 settings.llm_timeout（默认 30）。
 """
 
 from __future__ import annotations
