@@ -234,3 +234,54 @@ def test_llm_upstream_error_propagates(monkeypatch):
 
     with pytest.raises(LLMUpstreamError):
         parse_resume(RESUME_OK, JD_OK)
+
+
+def test_multiple_emails_are_rejected(monkeypatch):
+    """出现两个不同邮箱 → 判定为多份简历，不调用 LLM。"""
+    called = {"n": 0}
+
+    def fake(system, user, schema, temperature=0.2):
+        called["n"] += 1
+        return ParseResult.model_validate(_llm_payload())
+
+    monkeypatch.setattr(parse_service, "model_json", fake)
+    text = RESUME_OK + "\n邮箱：a@example.com\n邮箱：b@example.com"
+
+    with pytest.raises(InvalidInput) as err:
+        parse_resume(text, JD_OK)
+
+    assert "多份简历" in err.value.message
+    assert called["n"] == 0
+
+
+def test_multiple_phone_numbers_are_rejected(monkeypatch):
+    """两个不同手机号，带横线也要能识别 → 判定为多份简历。"""
+    monkeypatch.setattr(parse_service, "model_json", lambda *a, **k: None)
+    text = RESUME_OK + "\n电话：138-0000-0000\n电话：139-0000-0000"
+
+    with pytest.raises(InvalidInput) as err:
+        parse_resume(text, JD_OK)
+
+    assert "多份简历" in err.value.message
+
+
+def test_repeated_core_section_is_rejected(monkeypatch):
+    """「教育经历」重复出现 → 判定为多份简历。"""
+    monkeypatch.setattr(parse_service, "model_json", lambda *a, **k: None)
+    text = RESUME_OK + "\n教育经历\nXX大学\n教育经历\nYY大学"
+
+    with pytest.raises(InvalidInput) as err:
+        parse_resume(text, JD_OK)
+
+    assert "多份简历" in err.value.message
+
+
+def test_single_resume_with_one_email_and_phone_passes(monkeypatch):
+    """一份简历里同时有一个邮箱和一个手机号，不应误判。"""
+    calls: dict = {}
+    _fake_llm_ok(monkeypatch, calls)
+    text = RESUME_OK + "\n邮箱：a@example.com\n电话：138-0000-0000"
+
+    result = parse_resume(text, JD_OK)
+
+    assert result.parsed.raw_text == text

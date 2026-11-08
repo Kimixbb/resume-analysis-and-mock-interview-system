@@ -5,6 +5,7 @@
 """
 
 from pathlib import Path
+import re
 
 from app.contracts.parse import ParseResult, ParseResponse, ResumeParsed
 from app.core.errors import InvalidInput
@@ -14,6 +15,19 @@ from app.core.llm import model_json
 RESUME_MIN, RESUME_MAX = 100, 8000
 JD_MIN, JD_MAX = 50, 8000
 
+# 多份简历的强信号：多个邮箱/手机号，或重复出现核心栏目
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+MOBILE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
+RESUME_SECTIONS = (
+    "教育经历",
+    "项目经历",
+    "实习经历",
+    "工作经历",
+    "求职意向",
+    "个人信息",
+    "联系方式",
+)
+
 # prompt 模板：services/ 的上一层是 app/，prompts 放在 app/prompts/ 下
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "parse.md"
 
@@ -21,6 +35,35 @@ PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "parse.md"
 def _system_prompt() -> str:
     """读 prompt 模板文件（文件很小，每次现读即可）。"""
     return PROMPT_PATH.read_text(encoding="utf-8")
+
+
+def _looks_like_multiple_resumes(text: str) -> bool:
+    """用确定性信号判断用户是否一次粘贴了多份简历。
+
+    强信号：
+    - 出现两个及以上不同邮箱；
+    - 出现两个及以上不同手机号；
+    - 「教育经历」「求职意向」「个人信息」等核心栏目重复出现；
+    - 至少两类栏目同时重复出现。
+
+    不做姓名识别，避免把同一个人的多个「姓名：」写法误判。
+    """
+    emails = {match.group(0).lower() for match in EMAIL_RE.finditer(text)}
+    if len(emails) >= 2:
+        return True
+
+    # 去掉手机号里的空格、横线和括号后再匹配，兼容 138-0000-0000 这种写法
+    digits_only = re.sub(r"[\s\-()+]", "", text)
+    phones = {match.group(0) for match in MOBILE_RE.finditer(digits_only)}
+    if len(phones) >= 2:
+        return True
+
+    counts = {section: text.count(section) for section in RESUME_SECTIONS}
+    if any(counts[section] >= 2 for section in ("教育经历", "求职意向", "个人信息")):
+        return True
+
+    repeated_sections = [section for section, count in counts.items() if count >= 2]
+    return len(repeated_sections) >= 2
 
 
 def _check_text(text: str, *, name: str, min_len: int, max_len: int) -> str:
@@ -64,6 +107,8 @@ def parse_resume(resume_text: str, jd_text: str) -> ParseResponse:
     LLM 输出非法会抛 LLMOutputInvalid(422)，超时会抛 LLMUpstreamError(500)，
     这两个异常这里不捕获，交给 main.py 统一转成 {code, message} 响应。
     """
+    if _looks_like_multiple_resumes(resume_text):
+        raise InvalidInput("检测到多份简历，请一次只粘贴一份简历")
     resume_text = _check_text(
         resume_text, name="简历", min_len=RESUME_MIN, max_len=RESUME_MAX
     )
