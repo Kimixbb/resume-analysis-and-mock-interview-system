@@ -18,7 +18,7 @@ def model_json(
     schema: type[T], # 规定我们希望得到的json类，统一用json格式来交流数据
     temperature: float = 0.2, # 这个参数是随机性，0-1，0.2希望它的输出更加稳定一些
 ) -> T:
-    url = settings.openai_base_url + "/chat/completions"
+    url = settings.openai_base_url.rstrip("/") + "/chat/completions"
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},

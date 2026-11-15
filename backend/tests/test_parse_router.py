@@ -231,3 +231,27 @@ def test_parse_with_properly_escaped_multiline_text_succeeds(monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json()["parsed"]["raw_text"] == _read_fixture("resume_bad.txt")
+
+
+def test_parse_rejects_multiple_resumes_before_llm(monkeypatch):
+    """两份简历混输 → 400，并且不调用 LLM。"""
+    called = {"n": 0}
+
+    def fake(system, user, schema, temperature=0.2):
+        called["n"] += 1
+        return ParseResult.model_validate(_llm_payload())
+
+    monkeypatch.setattr(parse_service, "model_json", fake)
+    payload = {
+        "resume_text": RESUME_OK
+        + "\n邮箱：a@example.com\n邮箱：b@example.com",
+        "jd_text": JD_OK,
+    }
+
+    resp = _post_parse(payload)
+
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["code"] == "INVALID_INPUT"
+    assert "多份简历" in body["message"]
+    assert called["n"] == 0
