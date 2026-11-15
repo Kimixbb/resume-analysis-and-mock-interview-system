@@ -1,6 +1,9 @@
 # 基于多Agent协作的简历诊断与模拟面试系统
 
+![演示动画](docs/答辩材料/系统视频演示.gif)
+
 组名：诊断面试官小组
+
 技术栈：Python 3.13 + FastAPI + Streamlit + SQLite + SQLAlchemy + OpenAI 兼容 LLM 接口
 
 ## 架构
