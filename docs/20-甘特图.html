@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>甘特图 — 计划 vs 实际（依据 git 提交历史）</title>
+<style>
+  :root{
+    --A:#2563eb;  /* A=Kimi 组长 */
+    --B:#16a34a;  /* B=hwwang18 */
+    --C:#ea580c;  /* C=wqr */
+    --D:#7c3aed;  /* D=lzj741 */
+    --P:#1f2937;  /* 阶段汇总 */
+    --grid:#d0d7de;
+    --tint:#eef2f7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans;background:#fff;color:#111827;padding:26px 24px 30px;}
+  .wrap{width:1480px;}
+  h1{font-size:22px;text-align:center;margin-bottom:4px;}
+  .sub{text-align:center;color:#6b7280;font-size:12px;margin-bottom:12px;}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 20px;justify-content:center;align-items:center;font-size:12px;margin-bottom:14px;}
+  .legend .item{display:flex;align-items:center;gap:6px;}
+  .sw{display:inline-block;width:26px;height:11px;border-radius:2px;}
+  .sw.plan{background:#fff;border:1.5px solid #64748b;}
+  .sw.now{width:auto;height:auto;color:#dc2626;font-weight:700;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;}
+  .pA{background:var(--A);} .pB{background:var(--B);} .pC{background:var(--C);} .pD{background:var(--D);}
+
+  .chart{border:1px solid #cbd5e1;border-radius:6px;}
+  .header,.row{display:grid;grid-template-columns:420px 1fr;}
+  .header{background:#f8fafc;border-bottom:2px solid #94a3b8;border-radius:5px 5px 0 0;}
+  .header .label{padding:7px 10px;font-weight:700;font-size:13px;display:flex;align-items:center;}
+  .weeks{display:flex;}
+  .weeks .wk{flex:1;text-align:center;padding:4px 0;font-size:12.5px;font-weight:700;border-left:1px solid var(--grid);}
+  .weeks .wk:nth-child(odd){background:var(--tint);}
+  .weeks .wk small{display:block;font-weight:400;color:#6b7280;font-size:10.5px;}
+
+  .body{position:relative;margin-bottom:52px;}
+  .row{border-top:1px solid #e5e7eb;}
+  .row:first-child{border-top:none;}
+  .row .label{padding:3px 10px;font-size:12.5px;display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap;}
+  .row.phase .label{font-weight:700;background:#f8fafc;}
+  .row .label .no{color:#9ca3af;font-size:10.5px;min-width:18px;text-align:right;flex:none;}
+  .track{position:relative;
+    background:
+      linear-gradient(90deg, transparent calc(25% - 1px), var(--grid) calc(25% - 1px) 25%, transparent 25% calc(50% - 1px), var(--grid) calc(50% - 1px) 50%, transparent 50% calc(75% - 1px), var(--grid) calc(75% - 1px) 75%, transparent 75%),
+      linear-gradient(90deg, var(--tint) 0 25%, #fff 25% 50%, var(--tint) 50% 75%, #fff 75% 100%);
+  }
+
+  .bar{position:absolute;border-radius:2px;z-index:2;}
+  .bar.plan{background:rgba(255,255,255,.92);border:1.5px solid #64748b;z-index:1;}
+  .bA{background:var(--A);} .bB{background:var(--B);} .bC{background:var(--C);} .bD{background:var(--D);} .bP{background:var(--P);}
+  .tag{position:absolute;font-size:10.5px;font-weight:700;white-space:nowrap;z-index:4;}
+  .tag.mute{color:#9ca3af;font-weight:400;}
+
+  .nowmark{position:absolute;top:0;bottom:0;left:420px;right:0;pointer-events:none;z-index:6;}
+  .nowmark .vline{position:absolute;right:-1px;top:0;bottom:0;border-left:2px dashed #dc2626;}
+  .nowmark .tri{position:absolute;right:-6px;bottom:-11px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:9px solid #dc2626;}
+  .nowmark .ntxt{position:absolute;right:-24px;bottom:-42px;width:64px;text-align:center;color:#dc2626;font-size:11px;font-weight:700;line-height:1.3;}
+
+  .note{margin-top:6px;font-size:11.5px;color:#6b7280;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>甘特图：计划 vs 实际</h1>
+  <div class="sub">项目：基于多 Agent 协作的简历诊断与模拟面试系统 ｜ 周期：2026-10-20 - 2026-11-16（4 周）</div>
+
+  <div class="legend">
+    <span class="item"><i class="sw plan"></i>计划（Baseline）</span>
+    <span class="item"><i class="sw" style="background:var(--P)"></i>实际 / 已完成（Actual）</span>
+    <span class="item"><b style="color:#dc2626">▲ Now</b></span>
+    <span class="item"><i class="dot pA"></i>A＝王思文</span>
+    <span class="item"><i class="dot pB"></i>B＝王瀚文</span>
+    <span class="item"><i class="dot pC"></i>C＝吴奇睿</span>
+    <span class="item"><i class="dot pD"></i>D＝刘子杰</span>
+  </div>
+
+  <div class="chart">
+    <div class="header">
+      <div class="label">活动</div>
+      <div class="weeks">
+        <div class="wk">第 1 周<small>10/20 – 10/26</small></div>
+        <div class="wk">第 2 周<small>10/27 – 11/02</small></div>
+        <div class="wk">第 3 周<small>11/03 – 11/09</small></div>
+        <div class="wk">第 4 周<small>11/10 – 11/16</small></div>
+      </div>
+    </div>
+
+    <div class="body">
+
+      <!-- ───── 周计划汇总（Phase）───── -->
+      <div class="row phase">
+        <div class="label"><span class="no">P1</span>第 1 周计划：骨架＋接口契约＋各自负责文档</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:0%;width:25%;top:5px;height:16px"></div>
+          <div class="bar bP" style="left:0%;width:25%;top:9px;height:8px"></div>
+        </div>
+      </div>
+      <div class="row phase">
+        <div class="label"><span class="no">P2</span>第 2 周计划：四模块并行编码＋单测＋模块文档</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:25%;width:25%;top:5px;height:16px"></div>
+          <div class="bar bP" style="left:21.429%;width:28.571%;top:9px;height:8px"></div>
+        </div>
+      </div>
+      <div class="row phase">
+        <div class="label"><span class="no">P3</span>第 3 周计划：测试＋修 Bug</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:50%;width:25%;top:5px;height:16px"></div>
+          <div class="bar bP" style="left:53.571%;width:21.429%;top:9px;height:8px"></div>
+        </div>
+      </div>
+      <div class="row phase">
+        <div class="label"><span class="no">P4</span>第 4 周计划：答辩材料＋文档 / Bug 修整</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:75%;width:25%;top:5px;height:16px"></div>
+          <div class="bar bP" style="left:71.429%;width:28.571%;top:9px;height:8px"></div>
+        </div>
+      </div>
+
+      <!-- ───── 活动 1–17 ───── -->
+      <div class="row">
+        <div class="label"><span class="no">1</span><i class="dot pA"></i>项目骨架与文档模板初始化</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:0%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:0%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(0% + 3.571% + 6px);top:7px;line-height:12px;color:var(--A)">A[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">2</span><i class="dot pC"></i><i class="dot pA"></i>设计文档 v1.0 与接口契约统一（02）</div>
+        <div class="track" style="height:32px">
+          <div class="bar plan" style="left:0%;width:25%;top:10px;height:12px"></div>
+          <div class="bar bC" style="left:3.571%;width:3.571%;top:6px;height:9px"></div>
+          <div class="bar bA" style="left:3.571%;width:3.571%;top:18px;height:9px"></div>
+          <span class="tag" style="left:calc(3.571% + 3.571% + 6px);top:5px;line-height:11px;color:var(--C)">C[80%]</span>
+          <span class="tag" style="left:calc(3.571% + 3.571% + 6px);top:17px;line-height:11px;color:var(--A)">A[20%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">3</span><i class="dot pC"></i>平台基础设施 core/（配置/ORM/异常/LLM 客户端）</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:0%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bC" style="left:3.571%;width:7.143%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(3.571% + 7.143% + 6px);top:7px;line-height:12px;color:var(--C)">C[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">4</span><i class="dot pB"></i>01-需求文档（功能清单与验收标准）</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:0%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bB" style="left:10.714%;width:3.571%;top:7px;height:12px"></div>
+          <div class="bar bB" style="left:46.429%;width:3.571%;top:7px;height:12px;opacity:.55"></div>
+          <span class="tag" style="left:calc(10.714% + 3.571% + 6px);top:7px;line-height:12px;color:var(--B)">B[100%]</span>
+          <span class="tag mute" style="left:calc(46.429% + 3.571% + 6px);top:7px;line-height:12px">修订</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">5</span><i class="dot pD"></i>03-测试文档（测试计划与用例）</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:0%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bD" style="left:7.143%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(7.143% + 3.571% + 6px);top:7px;line-height:12px;color:var(--D)">D[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">6</span><i class="dot pA"></i>20-进度表维护（贯穿全程）</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:0%;width:100%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:10.714%;width:3.571%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:42.857%;width:3.571%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:60.714%;width:3.571%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:89.286%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(10.714% + 3.571% + 6px);top:7px;line-height:12px;color:var(--A)">A[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">7</span><i class="dot pA"></i>M1 解析模块 /api/parse＋单测＋模块说明</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:25%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:21.429%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(21.429% + 3.571% + 6px);top:7px;line-height:12px;color:var(--A)">A[100%] 提前 1 天</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">8</span><i class="dot pB"></i>M2 匹配模块 /api/match＋单测＋模块说明</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:25%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bB" style="left:28.571%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(28.571% + 3.571% + 6px);top:7px;line-height:12px;color:var(--B)">B[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">9</span><i class="dot pC"></i>M3 风险拷问模块 /api/interrogate＋单测＋模块说明</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:25%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bC" style="left:35.714%;width:14.286%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(35.714% + 14.286% + 6px);top:7px;line-height:12px;color:var(--C)">C[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">10</span><i class="dot pD"></i>M4 报告 / STAR 重写 / 问答接口＋单测＋模块说明</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:25%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bD" style="left:39.286%;width:10.714%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(39.286% + 10.714% + 6px);top:7px;line-height:12px;color:var(--D)">D[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">11</span><i class="dot pD"></i>Streamlit 前端三栏页面＋串起全链路</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:25%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bD" style="left:39.286%;width:3.571%;top:7px;height:12px"></div>
+          <div class="bar bD" style="left:46.429%;width:3.571%;top:7px;height:12px;opacity:.55"></div>
+          <span class="tag" style="left:calc(39.286% + 3.571% + 6px);top:7px;line-height:12px;color:var(--D)">D[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">12</span><i class="dot pD"></i><i class="dot pC"></i>全链路集成 parse→match/interrogate→report</div>
+        <div class="track" style="height:32px">
+          <div class="bar plan" style="left:25%;width:25%;top:10px;height:12px"></div>
+          <div class="bar bD" style="left:46.429%;width:3.571%;top:6px;height:9px"></div>
+          <div class="bar bC" style="left:46.429%;width:3.571%;top:18px;height:9px"></div>
+          <span class="tag" style="left:calc(46.429% + 3.571% + 6px);top:5px;line-height:11px;color:var(--D)">D[60%]</span>
+          <span class="tag" style="left:calc(46.429% + 3.571% + 6px);top:17px;line-height:11px;color:var(--C)">C[40%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">13</span><i class="dot pD"></i><i class="dot pC"></i><i class="dot pA"></i>测试与缺陷修复（BUG-01 / 输入拦截 / 超时对齐）</div>
+        <div class="track" style="height:42px">
+          <div class="bar plan" style="left:50%;width:25%;top:15px;height:12px"></div>
+          <div class="bar bD" style="left:67.857%;width:3.571%;top:5px;height:9px"></div>
+          <div class="bar bC" style="left:67.857%;width:3.571%;top:16px;height:9px"></div>
+          <div class="bar bA" style="left:71.429%;width:3.571%;top:27px;height:9px"></div>
+          <span class="tag" style="left:calc(67.857% + 3.571% + 6px);top:4px;line-height:11px;color:var(--D)">D[40%]</span>
+          <span class="tag" style="left:calc(67.857% + 3.571% + 6px);top:15px;line-height:11px;color:var(--C)">C[30%]</span>
+          <span class="tag" style="left:calc(71.429% + 3.571% + 6px);top:26px;line-height:11px;color:var(--A)">A[30%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">14</span><i class="dot pA"></i>04-用户说明 v0.2</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:50%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:53.571%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:calc(53.571% + 3.571% + 6px);top:7px;line-height:12px;color:var(--A)">A[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">15</span><i class="dot pD"></i>文档收尾（测试文档 v0.8 / M4 说明 v1.5）</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:75%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bD" style="left:71.429%;width:3.571%;top:7px;height:12px"></div>
+          <div class="bar bD" style="left:85.714%;width:3.571%;top:7px;height:12px;opacity:.55"></div>
+          <span class="tag" style="left:calc(71.429% + 3.571% + 6px);top:7px;line-height:12px;color:var(--D)">D[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">16</span><i class="dot pA"></i>答辩材料（演示视频 / GIF / README）</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:75%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bA" style="left:92.857%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:auto;right:calc(7.143% + 6px);top:7px;line-height:12px;color:var(--A)">A[100%]</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label"><span class="no">17</span><i class="dot pC"></i>LLM 调用地址修复（尾斜杠）＋回归测试</div>
+        <div class="track" style="height:26px">
+          <div class="bar plan" style="left:75%;width:25%;top:7px;height:12px"></div>
+          <div class="bar bC" style="left:96.429%;width:3.571%;top:7px;height:12px"></div>
+          <span class="tag" style="left:auto;right:calc(3.571% + 6px);top:7px;line-height:12px;color:var(--C)">C[100%]</span>
+        </div>
+      </div>
+
+      <!-- Now 标记（今天 = 2026-11-16，项目收尾日） -->
+      <div class="nowmark">
+        <i class="vline"></i><i class="tri"></i>
+        <span class="ntxt">Now<br>11-16</span>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="note">
+    说明：空心框＝进度表中的周计划；实色条＝按 git 提交整理的实际执行，颜色对应负责人，条上标注投入占比；
+    ▲ Now＝2026-11-16（第 4 周末）。
+  </div>
+</div>
+</body>
+</html>
